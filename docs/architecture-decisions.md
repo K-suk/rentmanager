@@ -1,6 +1,6 @@
 # Issue #1 認証・無料公開の成立性記録
 
-確認日: 2026-09-23。現行構成: **Neon Postgres + アプリ内Better Auth / dev直接API検証合格 / 公開実測待ち**。
+確認日: 2026-09-23。現行構成: **Neon Postgres + アプリ内Better Auth / dev直接API・公開認証smoke合格 / Issue #1レビュー待ち**。
 
 ## ADR-005: 本人承認に基づく認証構成変更（現行の決定）
 
@@ -16,9 +16,9 @@
 | React / React DOM | 19.3.0 | 最小ログイン画面表示・操作確認 |
 | Better Auth | 1.7.5（アプリ内） | 専用Neon DBでメール/パスワード・Cookie検証成功 |
 | PostgreSQL driver | pg 8.23.0 | TLS証明書検証ON・Neon pooled接続成功 |
-| Vercel functions | 3.9.9 | VercelでのみattachDatabasePoolを登録。公開実測待ち |
+| Vercel functions | 3.9.9 | VercelでのみattachDatabasePoolを登録。公開ログイン・DBセッション成功 |
 | TypeScript | 6.0.3 | strict typecheck成功 |
-| ホスト | Vercel Hobby / Node 24.x / sin1 | 本人の個人・非商用用途確認済み。Node 24.21.0本番build成功。公開実測待ち |
+| ホスト | Vercel Hobby / Node 24.x / sin1 | 本人の個人・非商用用途確認済み。Node 24.21.0ローカルbuild・Vercel Node24公開build成功 |
 
 npm公式配布メタデータを確認し、package-lock.jsonで固定した。[Better Auth公式Next統合](https://better-auth.com/docs/integrations/next)、[設定仕様](https://better-auth.com/docs/reference/options)、[DB・migration仕様](https://better-auth.com/docs/concepts/database)、[セッション仕様](https://better-auth.com/docs/concepts/session-management)を参照。汎用SDKの採用は今回の構成変更承認に基づく。
 
@@ -48,7 +48,7 @@ npm公式配布メタデータを確認し、package-lock.jsonで固定した。
 
 Neon共有DBへの原子的UPSERTで、login/IPは最初の要求から5分間20回、write/社員は1分間60回。これは固定区間カウンター方式で、任意の移動窓の厳密上限ではない。IP保存キーは認証秘密値によるHMACで、生IPをrateテーブルには残さない。超過は429 + Retry-After、DB障害時は503で拒否。期限切れカウンターは少量ずつ掃除する。別の有料サービスは不要。
 
-Vercel上はホストが設定する `x-vercel-forwarded-for` のみを使用する。[公式request headers](https://vercel.com/docs/headers/request-headers)を確認した。一般の `x-forwarded-for` / `x-real-ip` や任意clientヘッダーは採用しない。ローカルは全アクセスを単一loopback枠として扱う。ホスト不明・Vercel IP欠落時はfail closed。Vercel自身でのヘッダー上書きと429は公開試験待ち。
+Vercel上はホストが設定する `x-vercel-forwarded-for` のみを使用する。[公式request headers](https://vercel.com/docs/headers/request-headers)を確認した。一般の `x-forwarded-for` / `x-real-ip` や任意clientヘッダーは採用しない。ローカルは全アクセスを単一loopback枠として扱う。ホスト不明・Vercel IP欠落時はfail closed。公開ログイン成功によりVercel IPヘッダーの存在・形式を確認。Vercel入口での偽造ヘッダー上書きと429境界そのものは未実測で、公式仕様とローカル境界試験の証拠を区別する。
 
 ### 設定台帳（値は記載しない）
 
@@ -59,7 +59,7 @@ Vercel上はホストが設定する `x-vercel-forwarded-for` のみを使用す
 | bootstrap専用 | BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD |
 | dev suite専用 | RENTMANAGER_PROBE_ACK |
 
-初期管理者パスワードは現在安全なランナーからだけ注入する。公開デモ資格情報の画面表示は後続Issue #3/#9で意図して用意するデモ値を使う。DB接続やCookie秘密値をデモ資格情報と混同しない。ホストruntimeにbootstrap資格情報や直接DB URLを常設しない。
+初期管理者パスワードは現在安全なランナーからだけ注入する。公開デモ資格情報の画面表示は後続Issue #3で、既に作成した初期管理者の同じ資格情報を明示的にデモ公開用として指定し、専用のサーバー描画設定から表示する。初期管理者のパスワードを変更・再発行する工程は設けない。DB接続やCookie秘密値をデモ資格情報と混同しない。ホストruntimeにbootstrap資格情報や直接DB URLを常設しない。
 
 dev許可Originは `http://localhost:3101`。将来の専用worktreeはdevelopment時のみlocalhost:3101〜3109から明示1つを許可できる。productionはHTTPS完全一致Originのみ。previewワイルドカードなし。
 
@@ -67,20 +67,37 @@ dev許可Originは `http://localhost:3101`。将来の専用worktreeはdevelopme
 
 | Issue #1項目 | 設定・実測結果 | 残る確認 |
 |---|---|---|
-| 専用プロジェクト/権限・分離 | 新規devでmigration/bootstrap/接続成功。mainとdev分離 | 公開側の実測結果受領待ち |
+| 専用プロジェクト/権限・分離 | 新規devでmigration/bootstrap/接続成功。mainとdev分離。進行役より公開mainのmigration/bootstrap成功を受領 | 他案件の利用なし |
 | ログイン・管理者作成・メールなし | adminログイン、管理者による架空社員追加、新社員の確認なしログイン成功 | 初期全4社員のseedは#9 |
-| 自由登録禁止・社員未登録拒否 | 直接sign-upを含む63攻撃で403。社員未登録の新規ログイン・既存セッション拒否 | 公開側smoke待ち |
-| 初期管理者の資格情報・自己削除保護 | 正しい公開資格情報を持つセッションでも拒否。DB6攻撃拒否・元の資格情報で再ログイン成功 | 公開側smoke待ち |
+| 自由登録禁止・社員未登録拒否 | 直接sign-upを含む63攻撃で403。社員未登録の新規ログイン・既存セッション拒否 | 公開で主要禁止経路403も確認 |
+| 初期管理者の資格情報・自己削除保護 | 正しい公開資格情報を持つセッションでも拒否。DB6攻撃拒否・元の資格情報で再ログイン成功 | 公開で主要禁止経路403も確認 |
 | 無効・降格社員の既存セッション | 無効後403、降格後の管理操作403、未登録403、再有効化403 | 業務routeにも共通ガード適用を#2/#3へ引継ぎ |
-| 無料host/SDK | Hobby選定、固定依存、型/lint/build成功 | 公開Node24/Secure Cookie/第三者ブラウザ待ち |
+| 無料host/SDK | Hobby選定、固定依存、型/lint/Node24 build・公開認証成功 | 業務フロー・負荷測定は後続 |
 | Origin/レート制限 | Origin無し/外部拒否、login20/21境界・spoof拒否・期限回復、write65並列中60だけ成功 | 本番ホストIP上書き実測待ち |
-| AI設定 | 進行役がdev/prod分離・Vercel env、作業者がdev schema/bootstrap設定 | 本番migration/deploy/接続確認待ち |
+| AI設定 | 進行役がdev/prod分離・Vercel env・公開schema/bootstrap、作業者がdev schema/bootstrap設定 | 設定済み・公開接続成功 |
 
-`npm run typecheck`、`npm run lint`、`npm run build`、旧Managedプローブ安全性17テスト、新アプリ直接HTTP suiteが成功。新suiteは専用dev上でのみ実行し、作成fixtureを清掃する。途中のdevサーバー設定再起動で一度suiteが中断したため、設定確定後に全体再実行して合格した。未確認の外部公開を成功扱いにしない。
+`npm run typecheck`、`npm run lint`、`npm run build`、旧Managedプローブ安全性17テスト、新アプリ直接HTTP suiteが成功。新suiteは専用dev上でのみ実行し、作成fixtureを清掃する。途中のdevサーバー設定再起動で一度suiteが中断したため、設定確定後に全体再実行して合格した。公開認証は下記smokeで確認した。業務全体の公開完了とは扱わない。
 
 UIはログイン成立性の最小画面のみ。`/Users/kosuke/.codex/skills/apple-design/SKILL.md` を読み、システム日本語フォント、余白、抑制した青、明示ラベル、可視focus、44px以上の操作領域、即時処理表示を適用した。進行役のブラウザ確認で画面表示・ログイン成功。全画面・レスポンシブ・業務フローの検証は#3/#10で行う。
 
-Issueは閉じず、PRはDraftのまま。公開実測情報を受けてこの表を更新してから進行役がゲートを判断する。
+### 公開実測（進行役、2026-09-23）
+
+Vercel deployment `dpl_DCDE8Pytx4cRttAMt4vLA6Z3CuM5` がREADY。正規URLは https://rentmanager-ebon.vercel.app 。Hobby / Node24 / Next16.3.6 / sin1でremote build成功。専用公開mainのmigration/bootstrapも成功。
+
+| 公開要求 | 実測結果 |
+|---|---|
+| 未認証の正規URLアクセス | 200。プラットフォームログイン不要。独立ブラウザで日本語ログイン操作部を確認 |
+| 未認証 `/api/me` | 401 |
+| 初期管理者ログイン | 200。現在のDB社員情報と対応。独立ブラウザでも「ログインしました」とログアウトボタンを確認 |
+| Cookie | Secure=true / HttpOnly=true / SameSite=Lax |
+| ログインJSON | tokenを含まない |
+| update-user/change-password/delete-user/sign-up/email/request-password-reset/send-verification-email | 全て403 ENDPOINT_DISABLED |
+| ログアウト | 200 |
+| ログアウト済みコピーCookieで `/api/me` | 401 |
+
+公開の破壊的fixture試験は実施しない。社員作成・無効化・降格・未登録・共有レート境界は専用devの同一コードで実測済み。公開認証smokeの成功と、後続Issueの備品貸出機能・全デモseed・公開資格情報表示・全ブラウザ検証を区別する。
+
+Issueは閉じず、PRはDraftのまま進行役へレビューを引き継ぐ。Issue #1の認証構成・無料公開基盤の成立性ゲートは確認できたが、RentManager全体の完成を意味しない。
 
 ---
 
