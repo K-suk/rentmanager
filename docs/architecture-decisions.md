@@ -1,10 +1,10 @@
 # Issue #1 認証・無料公開の成立性記録
 
-確認日: 2026-09-23。状態: **Draft / 外部実測待ち / Issue #1未完了**。
+確認日: 2026-09-23。状態: **Draft / 外部一部実測済み・自己変更禁止未達 / Issue #1未完了**。
 
 ## 判断
 
-承認済み要件のNeon Authを維持する。公開登録停止の設定は公式管理APIに存在するが、公開資格情報を持つ初期管理者の自己変更防止は成立を確認できていない。画面やNextのプロキシで機能を隠すだけでは、Neon Authの直接URLに対する要求を防げない。NFR-03・FR-12を未達のまま後続Issue #2へ進めない。
+承認済み要件のNeon Authを維持する。専用検証環境の直接APIで自己プロフィール・パスワード変更が成功し、現構成はNFR-03の自己変更禁止を満たさない。公開資格情報を持つ初期管理者を保護できる構成も未成立。画面やNextのプロキシで機能を隠すだけでは、Neon Authの直接URLに対する要求を防げない。NFR-03・FR-12を未達のまま後続Issue #2へ進めない。
 
 進行役と合意した方針は「Neon Authを維持し、専用fixtureで直接HTTP試験を準備、制限機能の確認まで基盤実装を保留」。別認証への置換、要件緩和、課金変更は未承認・未実施。
 
@@ -12,21 +12,46 @@
 
 | 項目 | 確認済み | 未確認・残作業 |
 |---|---|---|
-| 専用プロジェクト/ブランチ・権限 | プローブに対象照合ガードを実装。本人からNeon認証完了の申告あり | 進行役がCLI接続を再確認中。対象作成・権限・他案件データ不存在は未確認 |
-| メール/パスワードと社員作成 | 公式資料にログイン・Admin createUserが存在 | 外部の社員作成・確認/招待メールなしのログインは未実測 |
+| 専用プロジェクト/ブランチ・権限 | 進行役がNeon接続・free組織・新規専用環境作成を確認。プローブでも対象一致 | アプリ用開発/公開環境の設定は今後 |
+| メール/パスワードと社員作成 | 専用fixtureで直接ログイン200・セッション検証成功、確認不要設定 | 管理者createUser・配送イベント非発生の証明は未実測。fixtureの一時signup作成は管理者作成の代替証明にしない |
 | 自由登録の禁止 | 管理APIの `disable_sign_up` を確認 | 直接 `/sign-up/email`、OAuth等の別経路、社員未登録のアプリ拒否は未実測 |
-| 初期管理者保護 | 自己 `changePassword` / `updateUser` が公式機能。保護用設定を発見できず | Auth APIでの自己変更・削除、管理API経路の攻撃実測。資料に無いことを不可能の実証とはしない |
+| 初期管理者保護 | 専用fixtureの直接自己プロフィール/パスワード変更が200。パスワード変更後ログインも成功 | 現構成は自己変更禁止未達。保護ポリシーを持つ初期管理者は未作成、削除・別経路は未実測。あらゆるNeon構成で不可能との断定はしない |
 | 無効社員の既存セッション | 毎回DBの有効社員・権限を検査する方式を選定 | アプリ未実装。次リクエスト拒否・降格反映は未実測 |
 | 無料ホスト | Vercel CLI認証済み/Hobbyと進行役報告、本人から個人・非商用用途と回答。Vercel Hobbyを選定 | ビルド・無料実行枠・外部公開動作 |
-| 許可ドメイン/環境変数/レート制限 | 必要名・方針を以下に記録 | 外部許可ドメインは未設定・未確認。レート制限の実装・実測なし |
-| AIによる外部設定 | 進行役が接続作業を担当 | 専用無料環境/Auth/許可ドメイン/シークレットの設定完了証拠なし |
-| ローカルプローブ | 依存なしTypeScript、HTTP攻撃経路、秘密非出力、ガード/復元確認の17テスト成功 | 実Neon HTTPには未接続。SDKの実行互換性試験ではない |
+| 許可ドメイン/環境変数/レート制限 | 必要名・方針を以下に記録。専用Authへの接続実測済み | 公開Origin未設定。レート制限の実装・実測なし |
+| AIによる外部設定 | 進行役が新規無料環境/Auth/email-password設定を実APIで適用・読み戻し確認 | 公開環境・公開ドメイン・ホストシークレット未設定 |
+| プローブ | 依存なしTypeScript、HTTP攻撃経路、秘密非出力、ガード/復元確認の17テスト成功。login/profile/password実Neon実測 | SDK・Nextアプリの実行互換性試験ではない |
+
+## 実測台帳（進行役実行）
+
+2026-09-23、専用環境にのみ実行。既存案件は利用・変更せず、新規プロジェクトで空のmainから検証用ブランチを分離したとの進行役報告。読み取りプローブのスコープ照合も成功。
+
+| リソース | 確認内容 |
+|---|---|
+| 組織 | KosKos / `org-square-moon-08401809` / free |
+| プロジェクト | `rentmanager` / `patient-recipe-53794275` |
+| 検証ブランチ | `rentmanager-auth-probe-20260923` / `br-falling-star-b3b6n3zb` |
+| 空のdefault main | `br-soft-dawn-b3u8zj3r`。プローブは拒否対象 |
+| DB | PostgreSQL 17、AWS Singapore、0.25 CU |
+| Auth | better_auth有効。下記email/password設定を実APIで確認 |
+
+| プローブ | 実測 | 判定 |
+|---|---|---|
+| inspect | 対象一致、Auth OpenAPI 200、列挙11経路すべて存在 | 設定/経路の存在のみ確認 |
+| signup（登録停止時） | 400 | 拒否理由精査待ち。400だけで禁止設定の合格にはしない |
+| fixture bootstrap | 検証ブランチのみ一時signup許可、作成200、finallyで再禁止を読み戻し確認 | 社員管理の実装ではない |
+| login | 200、fixture ID一致、セッション検証成功 | 直接メール/パスワードログイン確認 |
+| profile | `/update-user` 200、元の名前へ復元・readback成功 | **自己更新禁止未達** |
+| password | `/change-password` 200、変更後資格情報でログイン200、元へ復元後ログイン成功 | **資格情報固定未達** |
+| Cookie | 直接Auth応答でHttpOnly=true、Secure=true、SameSite=None | NextアプリのCookie確認とは別。CSRF検証は残る |
+
+実測はtrusted Originで実施。Origin省略/不正Origin、管理者createUser、自己削除、メール送信API、アプリ認可、Next/Vercel公開はまだ未実測。秘密値・Cookie本文・入力資格情報は記録しない。
 
 ## ADR-001: Neon AuthのAPI設定と保護の不足
 
 調査対象は現行Managed Better Auth（Neon Auth）。旧Stack Authベースの資料と混在させない。[現行概要](https://neon.com/docs/auth/overview)、[管理APIガイド](https://neon.com/docs/auth/guides/manage-auth-api)、[公式OpenAPI](https://neon.com/api_spec/release/v2.json)を参照。
 
-管理APIの `PATCH /projects/{project_id}/branches/{branch_id}/auth/email_and_password` は次の設定を公開している。これは**設定案**であり、まだ適用していない。
+管理APIの `PATCH /projects/{project_id}/branches/{branch_id}/auth/email_and_password` は次の設定を公開している。**専用検証ブランチでは進行役が適用し、実APIで読み戻し確認済み**。公開環境は未設定。
 
 ```json
 {
@@ -94,20 +119,20 @@ Cloudflareの[現行Next.jsガイド](https://developers.cloudflare.com/workers/
 | 区分 | 名前/方針 | 現状 |
 |---|---|---|
 | アプリ秘密値 | `DATABASE_URL`, `NEON_AUTH_COOKIE_SECRET` | 未設定・値の記録禁止 |
-| Auth接続 | `NEON_AUTH_BASE_URL` | 専用環境取得待ち |
+| Auth接続 | `NEON_AUTH_BASE_URL` | 検証ブランチで取得・一致確認・接続済み。公開環境は未設定 |
 | 管理/プローブ | `NEON_API_KEY`, `NEON_PROJECT_ID`, `NEON_BRANCH_ID` | プローブ実行時のみ安全に注入。ブラウザへ渡さない |
 | プローブ専用 | `PROBE_ORIGIN`, `PROBE_ORIGIN_MODE`, `PROBE_DISPOSABLE_BRANCH_ACK`, `PROBE_EMAIL`, `PROBE_PASSWORD`, `PROBE_USER_ID`, `PROBE_DELETE_FIXTURE_ACK`, `PROBE_NO_EMAIL_POLICY_ACK` | [実行手順](../scripts/probes/README.md) |
 | ローカル許可Origin | `http://localhost:3101` | 登録予定・未設定。公開環境のlocalhost許可は原則不要 |
 | 公開許可Origin | ホストの正規HTTPS Originだけ | URL未取得・未設定。任意previewワイルドカードを許可しない |
-| 環境分離 | 開発/プローブ/公開を別Auth設定・ブランチで運用 | 外部実測待ち |
+| 環境分離 | 開発/プローブ/公開を別Auth設定・ブランチで運用 | 空mainとprobeを分離済み。アプリ開発/公開の設定は今後 |
 
 [許可ドメイン仕様](https://neon.com/docs/auth/guides/configure-domains)を基に進行役が設定する。CORS/Origin制限をサーバーからの直接Auth要求の権限制御として扱わない。Vercel Hobbyの[Runtime Logs](https://vercel.com/docs/logs/runtime)保持は1時間と公式資料で確認した。ログ保存の実測は未実施で、独自ログ基盤は追加しない。
 
 ## 再開時の合格ゲート
 
-1. 本人認証完了後、専用無料プロジェクト・権限・空の検証ブランチを確認する。
-2. [プローブ](../scripts/probes/README.md)のinspectを実行し、Auth設定・現行OpenAPI経路を確認する。
-3. メールなし管理者作成と直接ログイン、正常なセッション取得を成功させる。
+1. 確認済みの専用無料プロジェクト・検証ブランチを再照合する。他環境へ広げない。
+2. [プローブ](../scripts/probes/README.md)のinspectを再実行し、Auth設定・現行OpenAPI経路を確認する。
+3. 管理者によるメールなし社員作成を実測する。直接ログイン/セッション取得成功だけで社員作成を合格にしない。
 4. 公開登録、プロフィール・パスワード・メール変更、削除、管理者権限API、OTP/再設定等の全経路を実環境スキーマから列挙し、同一保護ポリシーのfixtureで直接要求を試す。成功、拒否理由、変更前後、復元/清掃を秘密なしで記録する。
 5. Neon Auth側で初期管理者保護が成立しなければ代替案の本人合意を取得し、Issue #1を未達のまま維持する。
 6. 選定したVercel Hobbyで使用版を固定してbuild・公開URL・Cookie・レート制限・ログ保持を実測する。
