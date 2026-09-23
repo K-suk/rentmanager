@@ -2,13 +2,17 @@
 
 Base: `affd6cc7514421332c24708977b10f2ce3a4ebd1` (verified Issue #1). Scope: foundation only; feature UI and public seed/reset are subsequent issues. Original requirement documents and their approved2026-09-23 auth override were read and preserved. No UI files changed; apple-design application is required of #3 onward. Skills read: Orca orchestration (`/Users/kosuke/.agents/skills/orchestration/SKILL.md` + version-matched CLI guide), Neon postgres and parent Neon (`/Users/kosuke/.codex/plugins/cache/openai-curated-remote/neon-postgres/2.0.0/skills/`). Existing pg and fixed dependencies retained per explicit task instruction.
 
-## Verified so far
+## Verified
 
 - Locked `npm ci`:403 packages, audit0 vulnerabilities. Existing versions and lockfile retained; no new dependency.
 - Node24.21.0: `npm run typecheck`, `npm run lint`, `npm test` (21 passing), `npm run build` passed. Static auth probe UI and dynamic auth/me/employees routes build successfully; feature routes intentionally not yet present.
 - Coordinator-provisioned empty `rentmanager_foundation_test` database on development Neon branch `br-calm-field-b382izdc`, identity `rentmanager-foundation-test-20260923`: empty migration, repeat migration and protected-admin bootstrap passed. This is separate database isolation on the dedicated development branch, not a claim of another branch or public clone.
-- Existing dedicated application dev DB migration passed without reset. No public DB migration, reset, deployment, merge or issue close performed by this worker.
-- First real Neon integration suite:7 tests passed (top-level +6 subtests),159.7s. Concurrent borrow/delete/extend/return outcomes, retries, inactive/unauthorized rejection, snapshots/FK/immutable protected rows, inactive-inclusive employee20 cap, active equipment100 cap. A second run adds explicit multi-extension-chain and history-only commit rejection; results appended when complete.
+- Existing dedicated application dev DB migration passed without reset; `scripts/db/verify-upgrade.ts` then applied two further migrations and compared complete protected employee/user/account objects, including IDs and password hashes, in memory: unchanged. No values were printed. No public DB migration, reset, deployment, merge or issue close performed by this worker.
+- First real Neon integration suite:7 tests passed (top-level +6 subtests),159.7s. Concurrent borrow/delete/extend/return outcomes, retries, inactive/unauthorized rejection, snapshots/FK/immutable protected rows, inactive-inclusive employee20 cap, active equipment100 cap. Second live run under Node24:8/8 passed,268.1s, including multi-extension chain commit and history-only rejection. This reran against the same database after cap fixtures, proving guarded cleanup/recreation works.
+
+- Live200-history fixture command passed exact DB count assertions:4 employees,20 equipment,200 loans,1 overdue,1 extension. Dates derive from current JST. Subsequent bootstrap returned protected-admin-retained.
+- GitHub Actions on implementation commit `ecd7c65cbd05b345b860278ee210273ce0384cb4`: run35870563532 succeeded, including ephemeral PostgreSQL17 repeated migration/bootstrap, two full DB suites and200-history fixtures. Earlier commit00d8308 also passed both push/PR CI runs35870252726/35870295217. GitGuardian passed. Final documentation commit checks are linked from PR12.
+- Port3102 dev startup passed on Node24 (Next ready in318ms). The full existing HTTP auth regression suite passed against isolated Neon:63 prohibited endpoint/Origin attacks, DB protected identity attacks, fictional employee create/login, immediate disable/demotion, unregistered rejection, copied-cookie logout rejection,60/65 concurrent write boundary,20/21 login boundary, spoof-header rejection and expiry recovery. Final result: PASS all live acceptance checks. Test fixture accounts were cleaned by the suite.
 
 ## Acceptance scope and remaining work
 
