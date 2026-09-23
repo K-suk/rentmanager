@@ -1,0 +1,37 @@
+{
+  "name": "rentmanager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "next dev -p 3101",
+    "build": "next build",
+    "start": "next start -p 3101",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "eslint .",
+    "test": "node --test scripts/probes/neon-auth.test.mts",
+    "db:migrate": "node scripts/auth/migrate.ts",
+    "db:bootstrap": "node scripts/auth/bootstrap.ts",
+    "test:auth": "node scripts/probes/app-auth.ts"
+  },
+  "dependencies": {
+    "@vercel/functions": "3.9.9",
+    "better-auth": "1.7.5",
+    "next": "16.3.6",
+    "pg": "8.23.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.3.6",
+    "typescript": "6.0.3"
+  }
+}

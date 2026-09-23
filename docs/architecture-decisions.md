@@ -1,5 +1,93 @@
 # Issue #1 認証・無料公開の成立性記録
 
+確認日: 2026-09-23。現行構成: **Neon Postgres + アプリ内Better Auth / dev直接API検証合格 / 公開実測待ち**。
+
+## ADR-005: 本人承認に基づく認証構成変更（現行の決定）
+
+進行役より2026-09-23に、本人が **Neon Postgres + アプリ内Better Auth** への変更を明示承認した旨を受領した。Managed Neon Authは直接自己プロフィール・パスワード変更を拒否できず、公開初期管理者の固定要件を満たさなかった。旧調査結果・失敗証拠は本書後半に保存する。旧記録中の「保留」「代替案未承認」は変更前の履歴であり、現在の指示ではない。
+
+承認例外は、要件文書のManaged Neon Auth指定（FR-01/FR-11/NFR-01/NFR-03/O-02等）のみ。公開登録禁止、メール不要、自己変更・削除禁止、初期管理者保護、無料公開、社員認可の条件は維持する。独自セッション暗号やパスワード方式は作らず、Better AuthのCookie検証と公式 `hashPassword` を利用する。Managed Auth SDK/外部Auth URLは新アプリには組み込まない。
+
+### バージョンと公開先
+
+| 項目 | 採用 | 検証 |
+|---|---|---|
+| Next.js | 16.3.6 / App Router / Node runtime | 型・本番build成功 |
+| React / React DOM | 19.3.0 | 最小ログイン画面表示・操作確認 |
+| Better Auth | 1.7.5（アプリ内） | 専用Neon DBでメール/パスワード・Cookie検証成功 |
+| PostgreSQL driver | pg 8.23.0 | TLS証明書検証ON・Neon pooled接続成功 |
+| Vercel functions | 3.9.9 | VercelでのみattachDatabasePoolを登録。公開実測待ち |
+| TypeScript | 6.0.3 | strict typecheck成功 |
+| ホスト | Vercel Hobby / Node 24.x / sin1 | 本人の個人・非商用用途確認済み。Node 24.21.0本番build成功。公開実測待ち |
+
+npm公式配布メタデータを確認し、package-lock.jsonで固定した。[Better Auth公式Next統合](https://better-auth.com/docs/integrations/next)、[設定仕様](https://better-auth.com/docs/reference/options)、[DB・migration仕様](https://better-auth.com/docs/concepts/database)、[セッション仕様](https://better-auth.com/docs/concepts/session-management)を参照。汎用SDKの採用は今回の構成変更承認に基づく。
+
+[Vercel Hobby条件](https://vercel.com/docs/plans/hobby)は個人・非商用用途に限定。進行役がHobbyを確認し、課金変更なし。新規専用Vercelプロジェクト `rentmanager`、正規Origin `https://rentmanager-ebon.vercel.app` を選定した。Cloudflareは旧予備調査の履歴のみで、二重公開しない。無料枠は無制限を意味せず、枠超過時に課金プランへ自動移行する設定は行わない。
+
+### 認証の境界
+
+- HTTP公開経路は `/api/auth/sign-in/email`（POST）、`/api/auth/sign-out`（POST）、`/api/auth/get-session`（GET）の3つだけ。全ての他のAuthパスは、bodyやOriginによらず明示403。未対応HTTPメソッドも405で拒否する。
+- Better Auth自身にも `before` フックの同じ許可リストを適用する。`disableSignUp=true`、メール変更/ユーザー削除をdisabledにし、ユーザー/アカウント更新・削除のDBフックを拒否する。新規OAuth・OTP・Magic Link・Admin・Organizationプラグインは登録しない。
+- SMTP/APIメールクライアント、メール送信callback、メール認証・招待プラグイン、配送用環境変数は一切登録しない。メール非送信は、構成と実コードの不存在、禁止経路拒否、確認なしログインで確認する。外部メールプロバイダー自体がないため配送イベント試験は適用外。
+- POSTは正規Origin完全一致必須。Originなし・外部Origin・cross-siteを拒否する。CORSだけに依存しない。要求body上限8KiB。
+- 全保護リクエストでDB-backed sessionを検証し、社員のactive/roleを毎回DBから取得する。Cookie cacheは無効。Authセッション作成時にも有効社員の存在を確認する。
+- CookieはHttpOnly/SameSite=Lax、HTTPSではSecure。トークンをJSON応答やlocalStorageへ返さない。ログアウトでDBセッションを失効し、コピーCookie再送も拒否する。
+- 追加社員は管理者ガード + transaction内の再認可 + advisory lockを使い、`user`/`account`/`employee`を一括作成する。公式scryptハッシュのみをAuthのaccountテーブルへ保存。Authだけ成功する途中状態は作らない。最大20人、example.comのみ、12〜128文字パスワード、1〜100文字氏名を検証する。
+- 初期管理者の社員行・Authユーザー行・資格情報行にはDBトリガーも適用。社員の変更/削除、Auth行の更新/削除、保護ユーザーへの別account追加を拒否する。DB所有者によるDDL改変は脅威境界外で、DB資格情報を閲覧者へ公開しない。
+- 社員無効化・降格は管理者のみ。既存セッションの次リクエストから反映する。再有効化は提供しない。最後の管理者保護は同一advisory lock内で判定する。通常運用では常に初期管理者が有効adminとして残る。
+
+### DB・環境分離とmigration
+
+新規専用devブランチ: `br-calm-field-b382izdc` / `rentmanager-app-dev`（進行役が空mainから作成）。公開は同プロジェクトの専用mainを利用し、devプローブを公開環境には実行しない。既存の他案件データは利用しない。
+
+`db:migrate` は固定Better Auth版の公式 `getMigrations` で差分を検出・SQL化し、所有する最小employee/rate-limit/環境識別テーブル・保護トリガーとともにトランザクションで適用する。DDLはコードとしてGit管理し、実行に専用対象ACK・UNPOOLED URL・プール側との同一endpoint/database/user照合・環境識別を必須とする。環境purposeの不一致は拒否。備品・貸出などIssue #2の業務スキーマは未作成。
+
+`db:bootstrap` は初期管理者を一度だけ作り、再実行で既存保護管理者を維持する。Webからは実行できない。認証用の `employee.auth_user_id` を後続基盤の社員契約として引き継ぎ、認証schema/migrationの所有者を一本化する。
+
+### 無料レート制限
+
+Neon共有DBへの原子的UPSERTで、login/IPは最初の要求から5分間20回、write/社員は1分間60回。これは固定区間カウンター方式で、任意の移動窓の厳密上限ではない。IP保存キーは認証秘密値によるHMACで、生IPをrateテーブルには残さない。超過は429 + Retry-After、DB障害時は503で拒否。期限切れカウンターは少量ずつ掃除する。別の有料サービスは不要。
+
+Vercel上はホストが設定する `x-vercel-forwarded-for` のみを使用する。[公式request headers](https://vercel.com/docs/headers/request-headers)を確認した。一般の `x-forwarded-for` / `x-real-ip` や任意clientヘッダーは採用しない。ローカルは全アクセスを単一loopback枠として扱う。ホスト不明・Vercel IP欠落時はfail closed。Vercel自身でのヘッダー上書きと429は公開試験待ち。
+
+### 設定台帳（値は記載しない）
+
+| 用途 | 環境変数名 |
+|---|---|
+| アプリruntime | DATABASE_URL, RENTMANAGER_DB_HOST, BETTER_AUTH_SECRET, BETTER_AUTH_URL |
+| migration専用 | DATABASE_URL_UNPOOLED, RENTMANAGER_MIGRATE_ACK, RENTMANAGER_ENVIRONMENT |
+| bootstrap専用 | BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD |
+| dev suite専用 | RENTMANAGER_PROBE_ACK |
+
+初期管理者パスワードは現在安全なランナーからだけ注入する。公開デモ資格情報の画面表示は後続Issue #3/#9で意図して用意するデモ値を使う。DB接続やCookie秘密値をデモ資格情報と混同しない。ホストruntimeにbootstrap資格情報や直接DB URLを常設しない。
+
+dev許可Originは `http://localhost:3101`。将来の専用worktreeはdevelopment時のみlocalhost:3101〜3109から明示1つを許可できる。productionはHTTPS完全一致Originのみ。previewワイルドカードなし。
+
+### 実測結果と残作業（現行構成）
+
+| Issue #1項目 | 設定・実測結果 | 残る確認 |
+|---|---|---|
+| 専用プロジェクト/権限・分離 | 新規devでmigration/bootstrap/接続成功。mainとdev分離 | 公開側の実測結果受領待ち |
+| ログイン・管理者作成・メールなし | adminログイン、管理者による架空社員追加、新社員の確認なしログイン成功 | 初期全4社員のseedは#9 |
+| 自由登録禁止・社員未登録拒否 | 直接sign-upを含む63攻撃で403。社員未登録の新規ログイン・既存セッション拒否 | 公開側smoke待ち |
+| 初期管理者の資格情報・自己削除保護 | 正しい公開資格情報を持つセッションでも拒否。DB6攻撃拒否・元の資格情報で再ログイン成功 | 公開側smoke待ち |
+| 無効・降格社員の既存セッション | 無効後403、降格後の管理操作403、未登録403、再有効化403 | 業務routeにも共通ガード適用を#2/#3へ引継ぎ |
+| 無料host/SDK | Hobby選定、固定依存、型/lint/build成功 | 公開Node24/Secure Cookie/第三者ブラウザ待ち |
+| Origin/レート制限 | Origin無し/外部拒否、login20/21境界・spoof拒否・期限回復、write65並列中60だけ成功 | 本番ホストIP上書き実測待ち |
+| AI設定 | 進行役がdev/prod分離・Vercel env、作業者がdev schema/bootstrap設定 | 本番migration/deploy/接続確認待ち |
+
+`npm run typecheck`、`npm run lint`、`npm run build`、旧Managedプローブ安全性17テスト、新アプリ直接HTTP suiteが成功。新suiteは専用dev上でのみ実行し、作成fixtureを清掃する。途中のdevサーバー設定再起動で一度suiteが中断したため、設定確定後に全体再実行して合格した。未確認の外部公開を成功扱いにしない。
+
+UIはログイン成立性の最小画面のみ。`/Users/kosuke/.codex/skills/apple-design/SKILL.md` を読み、システム日本語フォント、余白、抑制した青、明示ラベル、可視focus、44px以上の操作領域、即時処理表示を適用した。進行役のブラウザ確認で画面表示・ログイン成功。全画面・レスポンシブ・業務フローの検証は#3/#10で行う。
+
+Issueは閉じず、PRはDraftのまま。公開実測情報を受けてこの表を更新してから進行役がゲートを判断する。
+
+---
+
+以下はManaged Neon Authでの旧調査・失敗証拠であり、新構成の設定や検証結果ではない。
+
+# 旧Managed Neon Authの検証記録（履歴）
+
 確認日: 2026-09-23。状態: **Draft / 外部一部実測済み・自己変更禁止未達 / Issue #1未完了**。
 
 ## 判断

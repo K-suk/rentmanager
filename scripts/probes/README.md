@@ -66,3 +66,24 @@ node --test scripts/probes/neon-auth.test.mts
 ```
 
 ネットワークをスタブ化し、対象誤り・デフォルトブランチ・URL不一致・メール設定・確認指定不足でPOSTしないこと、秘密値を含む応答/例外を出力しないこと、登録成功を失敗と判定すること、403を合格にしないことを確認する。**Neon実測ではない。**
+
+## 承認後のアプリ内Better Auth検証（現行）
+
+2026-09-23、本人承認によりNeon Postgres + アプリ内Better Authへ変更。上記のManaged Neon Authプローブは失敗証拠の保存用で、新アプリの検証には `app-auth.ts` を使う。
+
+環境変数は [.env.example](../../.env.example) の**名前のみ**を参照。秘密値は安全なランナーでプロセスへ注入し、出力しない。既存の別案件や公開DBでは実行しない。`BETTER_AUTH_URL=http://localhost:3101`、`RENTMANAGER_PROBE_ACK=rentmanager-app-dev-only`、DBの `app_environment.purpose=rentmanager-app-dev` が全て必要。
+
+```sh
+# 専用dev DBに対してだけ実行。値を注入したプロセスで使用する。
+RENTMANAGER_ENVIRONMENT=rentmanager-app-dev RENTMANAGER_MIGRATE_ACK=rentmanager-dedicated-only npm run db:migrate
+RENTMANAGER_MIGRATE_ACK=rentmanager-dedicated-only npm run db:bootstrap
+npm run dev
+# 別ターミナル、同じdev接続環境
+RENTMANAGER_PROBE_ACK=rentmanager-app-dev-only npm run test:auth
+```
+
+プローブは直接HTTPで21種の禁止経路を3つのOrigin条件で攻撃し、正常ログイン、社員作成、既存セッションの無効化・降格・社員未登録、ログアウト、Cookie属性、DB保護、共有レート制限を確認する。初期管理者には専用devの架空管理者だけを使う。DBトリガー試験はSAVEPOINTでロールバックする。新規fixtureはランダムなメールとパスワードをメモリ内で生成し、作成IDだけを清掃する。公開初期管理者への破壊試験は行わない。
+
+ローカルIPの共有レート枠は試験中だけ保存・初期化し、finallyで復元する。**この間、同じdev DB・3101ポートで他のログイン試験を並行しない。** 20/21回の境界を検査するための隔離であり、実装に公開リセットAPIはない。ネットワーク断・プロセス強制終了時は清掃を保証しない。再実行前に専用dev内だけで残fixtureを確認する。結果はPASS/FAILラベルのみで、レスポンス本文・ID・Cookie・秘密値を出力しない。
+
+終了0はこのsuiteの合格。公開先のSecure Cookie/ホスト由来IP/第三者ブラウザの検証は進行役が別途行う。ブラウザ互換性・業務UI・貸出スキーマ・デモ全4人と備品20件のシードは後続Issueの対象。
