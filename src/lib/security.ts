@@ -2,7 +2,8 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import { auth } from './auth.ts';
 import { db, origin, secret } from './db.ts';
-export class HttpError extends Error { status: number; code: string; constructor(status: number, code: string) { super(code); this.status=status; this.code=code; } }
+import { HttpError } from './errors.ts';
+export { HttpError } from './errors.ts';
 export function csrf(request: Request) {
   if (request.headers.get('origin') !== origin() || request.headers.get('sec-fetch-site') === 'cross-site') throw new HttpError(403, 'ORIGIN_REJECTED');
 }
@@ -47,7 +48,7 @@ export async function jsonBody(request: Request) {
 }
 export function json(data: unknown, status=200) { return Response.json(data, {status, headers:{'Cache-Control':'no-store'}}); }
 export function failure(error: unknown) {
-  if (error instanceof HttpError) return Response.json({error:error.code}, {status:error.status, headers:{'Cache-Control':'no-store', ...(error.status === 429 ? {'Retry-After':'300'} : {})}});
+  if (error instanceof HttpError) return Response.json({error:error.code, ...(error.fields ? {fields:error.fields} : {})}, {status:error.status, headers:{'Cache-Control':'no-store', ...(error.status === 429 ? {'Retry-After':'300'} : {})}});
   const traceId=randomUUID(); console.error(JSON.stringify({time:new Date().toISOString(),operation:'request',traceId}));
   return json({error:'SERVICE_UNAVAILABLE',traceId},503);
 }

@@ -87,3 +87,8 @@ RENTMANAGER_PROBE_ACK=rentmanager-app-dev-only npm run test:auth
 ローカルIPの共有レート枠は試験中だけ保存・初期化し、finallyで復元する。**この間、同じdev DB・3101ポートで他のログイン試験を並行しない。** 20/21回の境界を検査するための隔離であり、実装に公開リセットAPIはない。ネットワーク断・プロセス強制終了時は清掃を保証しない。再実行前に専用dev内だけで残fixtureを確認する。結果はPASS/FAILラベルのみで、レスポンス本文・ID・Cookie・秘密値を出力しない。
 
 終了0はこのsuiteの合格。公開先のSecure Cookie/ホスト由来IP/第三者ブラウザの検証は進行役が別途行う。ブラウザ互換性・業務UI・貸出スキーマ・デモ全4人と備品20件のシードは後続Issueの対象。
+
+
+### Issue #2 isolated test compatibility
+
+The current app probe accepts the explicitly assigned localhost port3101–3109. For a dedicated `rentmanager-test` database it additionally requires `RENTMANAGER_TEST_ACK=isolated-test-only`, matching test ID and database marker/name via `assertTestDatabase`; public markers remain rejected. Run after canonical4-loan fixtures, not after the cap test that intentionally leaves20 employees. Inject `PORT` and matching `BETTER_AUTH_URL`; never run a second server/probe on the same DB. Probe ACK retains the legacy literal `rentmanager-app-dev-only` for compatibility even in guarded test mode. No authentication endpoint policy changed.

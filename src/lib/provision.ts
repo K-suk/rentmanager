@@ -2,19 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword } from 'better-auth/crypto';
 import { db } from './db.ts';
 import { HttpError } from './security.ts';
-export type EmployeeInput = {email:string; password:string; name:string; role:'admin'|'employee'};
-export function validateEmployee(input: EmployeeInput) {
-  if (!input || typeof input.email !== 'string' || typeof input.password !== 'string' || typeof input.name !== 'string') throw new HttpError(400,'INVALID_INPUT');
-  const email=input.email.trim().toLowerCase(); const name=input.name.trim();
-  if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@example\.com$/.test(email) || email.length>254 || name.length<1 || name.length>100 || input.password.length<12 || input.password.length>128 || !['admin','employee'].includes(input.role)) throw new HttpError(400,'INVALID_INPUT');
-  return {...input,email,name};
-}
+import { validateEmployee, type EmployeeInput } from './validation.ts';
+export { validateEmployee, type EmployeeInput } from './validation.ts';
 export async function provision(input: EmployeeInput, actorId: string | null, bootstrap=false) {
   const value=validateEmployee(input);
   const password=await hashPassword(value.password);
   const client=await db().connect();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock_shared(741000)');
     await client.query("SELECT pg_advisory_xact_lock(741001)");
     if(bootstrap) {
       const existing=await client.query('SELECT auth_user_id FROM employee WHERE protected');

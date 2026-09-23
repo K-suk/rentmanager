@@ -1,0 +1,51 @@
+name: foundation
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rentmanager
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: rentmanager_ci_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CI: 'true'
+      DATABASE_URL: postgres://rentmanager:isolated-ci-only@localhost:5432/rentmanager_ci_test
+      DATABASE_URL_UNPOOLED: postgres://rentmanager:isolated-ci-only@localhost:5432/rentmanager_ci_test
+      RENTMANAGER_DB_HOST: localhost
+      RENTMANAGER_DB_MODE: isolated-ci
+      RENTMANAGER_ENVIRONMENT: rentmanager-test
+      RENTMANAGER_TEST_ID: rentmanager-ci-test
+      RENTMANAGER_TEST_ACK: isolated-test-only
+      RENTMANAGER_MIGRATE_ACK: rentmanager-dedicated-only
+      BETTER_AUTH_URL: http://localhost:3102
+      BETTER_AUTH_SECRET: ci-only-ephemeral-auth-secret-32-characters
+      BOOTSTRAP_ADMIN_EMAIL: ci-admin@example.com
+      BOOTSTRAP_ADMIN_PASSWORD: ci-only-admin-password
+      RENTMANAGER_FIXTURE_PASSWORD: ci-only-fixture-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          BETTER_AUTH_URL: https://rentmanager-ci.invalid
+      - run: npm run db:migrate && npm run db:migrate
+      - run: npm run db:bootstrap && npm run db:bootstrap
+      - run: npm run test:db && npm run test:db
+      - run: npm run db:fixtures -- --200

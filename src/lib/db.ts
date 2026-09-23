@@ -6,10 +6,11 @@ export function db() {
     const value = process.env.DATABASE_URL;
     if (!value || !process.env.RENTMANAGER_DB_HOST) throw new Error('Database configuration missing');
     const url = new URL(value);
-    if (url.hostname !== process.env.RENTMANAGER_DB_HOST || !url.hostname.endsWith('.neon.tech')) throw new Error('Database scope mismatch');
+    const localTest = process.env.RENTMANAGER_DB_MODE === 'isolated-ci' && process.env.CI === 'true' && process.env.RENTMANAGER_ENVIRONMENT === 'rentmanager-test' && process.env.RENTMANAGER_TEST_ACK === 'isolated-test-only' && ['localhost','127.0.0.1'].includes(url.hostname) && /^\/rentmanager_[a-z0-9_]*test$/.test(url.pathname);
+    if (url.hostname !== process.env.RENTMANAGER_DB_HOST || (!url.hostname.endsWith('.neon.tech') && !localTest)) throw new Error('Database scope mismatch');
     // Never let URL sslmode downgrade certificate validation.
     url.searchParams.delete('sslmode'); url.searchParams.delete('channel_binding');
-    instance = new Pool({ connectionString: url.toString(), ssl: { rejectUnauthorized: true }, max: 4, idleTimeoutMillis: 10000, connectionTimeoutMillis: 15000 });
+    instance = new Pool({ connectionString: url.toString(), ssl: localTest ? false : { rejectUnauthorized: true }, max: 4, idleTimeoutMillis: 10000, connectionTimeoutMillis: 15000 });
     if(process.env.VERCEL === '1') attachDatabasePool(instance);
     instance.on('error', () => console.error('database_pool_error'));
   }
