@@ -1,0 +1,10 @@
+# Credentials must be injected at runtime; ignored files are not permission to save them.
+.env
+.env.*
+!.env.example
+.neon
+.vercel/
+.wrangler/
+node_modules/
+.next/
+.open-next/
