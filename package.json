@@ -7,15 +7,17 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "next dev -p 3101",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3101",
+    "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",
-    "test": "node --test scripts/probes/neon-auth.test.mts",
+    "test": "node --test tests/*.test.ts scripts/probes/neon-auth.test.mts",
     "db:migrate": "node scripts/auth/migrate.ts",
     "db:bootstrap": "node scripts/auth/bootstrap.ts",
-    "test:auth": "node scripts/probes/app-auth.ts"
+    "test:auth": "node scripts/probes/app-auth.ts",
+    "test:db": "node --test --test-concurrency=1 tests/db/*.test.ts",
+    "db:fixtures": "node scripts/db/fixtures.ts"
   },
   "dependencies": {
     "@vercel/functions": "3.9.9",

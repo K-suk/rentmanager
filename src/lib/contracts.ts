@@ -1,0 +1,16 @@
+import type { Category, Role } from './validation.ts';
+import type { LoanStatus } from './dates.ts';
+export type { ErrorEnvelope } from './errors.ts';
+export type { EquipmentInput, EmployeeInput, Category, Role } from './validation.ts';
+export type { LoanMutationResult } from './operations.ts';
+export type EmployeeView = { id: string; name: string; email: string; role: Role; active: boolean; protected: boolean };
+export type EquipmentView = { id: string; assetNumber: string; name: string; category: Category; description: string; status: 'available' | 'active' | 'overdue'; borrowerName: string | null; dueDate: string | null; loanId: string | null };
+export type LoanView = { id: string; equipmentId: string; borrowerId: string; assetNumber: string; equipmentName: string; borrowerName: string; borrowedAt: string; dueDate: string; returnedAt: string | null; returnedBy: string | null; returnedByName: string | null; equipmentDeleted: boolean; borrowerActive: boolean; status: LoanStatus };
+export type ExtensionView = { id: string; loanId: string; oldDueDate: string; newDueDate: string; actorId: string; actorName: string; changedAt: string };
+export type EquipmentQuery = { search?: string; category?: Category; status?: EquipmentView['status'] };
+export type LoanQuery = { scope: 'mine' | 'all'; status: 'all' | 'active' | 'returned'; limit?: number; offset?: number };
+export type ListResult<T> = { items: T[]; total: number; today: string };
+export type BorrowInput = { equipmentId: string; dueDate: string; idempotencyKey: string };
+export type ReturnInput = { loanId: string; expectedDueDate: string; idempotencyKey: string };
+export type ExtendInput = ReturnInput & { dueDate: string };
+export type EmployeeUpdateInput = { id: string; name?: string; role: Role; active: boolean };

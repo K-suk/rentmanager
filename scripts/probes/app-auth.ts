@@ -2,6 +2,7 @@ import { randomUUID, createHmac } from 'node:crypto';
 import { db, origin, secret } from '../../src/lib/db.ts';
 import { rateLimit } from '../../src/lib/security.ts';
 import { APIError } from 'better-auth/api';
+import { assertTestDatabase } from '../db/test-guard.ts';
 import { auth } from '../../src/lib/auth.ts';
 
 // Mutates only newly generated fixtures on the explicitly acknowledged dev DB.
@@ -16,9 +17,10 @@ async function call(path:string,method='GET',body:unknown=undefined,cookie='',re
 function cookieOf(response:Response) {return response.headers.getSetCookie().map(x=>x.split(';')[0]).join('; ');}
 async function signIn(email:string,password:string) {return call('/api/auth/sign-in/email','POST',{email,password});}
 try {
-  if(process.env.RENTMANAGER_PROBE_ACK!=='rentmanager-app-dev-only' || origin()!=='http://localhost:3101')throw new Error('Scope');
+  if(process.env.RENTMANAGER_PROBE_ACK!=='rentmanager-app-dev-only' || !/^http:\/\/localhost:310[1-9]$/.test(origin()))throw new Error('Scope');
   const identity=await db().query("SELECT value FROM app_environment WHERE key='purpose'");
-  if(identity.rows[0]?.value!=='rentmanager-app-dev')throw new Error('Scope');
+  if(identity.rows[0]?.value==='rentmanager-test') await assertTestDatabase(db());
+  else if(identity.rows[0]?.value!=='rentmanager-app-dev')throw new Error('Scope');
   isolatedLoginKey=createHmac('sha256',secret()).update('login:local-loopback').digest('hex');
   savedLogin=(await db().query('SELECT * FROM app_rate_limit WHERE key=$1',[isolatedLoginKey])).rows[0];
   await db().query('DELETE FROM app_rate_limit WHERE key=$1',[isolatedLoginKey]);
